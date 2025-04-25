@@ -1,0 +1,3 @@
+This project is an algorithm that finds the best case placements for Wublins on Wublin island in the game "My Singing Monsters". If you don't know how Wublins work, here's a quick rundown: Wublins are creatures that have a like/dislike system called "polarity"
+based on who is nearby them. Wublins are more productive with someone they like and less productive near someone they hate. This algorithm searches for the best layouts on the Wublin island map to maximize like relationships and minimize dislikes. The current plan is to
+store all of these layout on a website and let the user filter through all the layouts to find the design they like most to use in theier own game.
