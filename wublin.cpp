@@ -12,7 +12,7 @@ void Wublin::setHates(std::string h){hates = h;}
 
 std::ostream& operator<<(std::ostream& os, const Wublin& passedWublin) //This is the smarter practice I've heard about using the output stream operator overload
 {
-    os << "Name: " << passedWublin.getName() << "\nSize: " << passedWublin.getSize() << "\nLikes: " << passedWublin.getLikes() << "\nHates: " << passedWublin.getHates() << '\n';
+    os << "Name:  " << passedWublin.getName() << "\nSize:  " << passedWublin.getSize() << "\nLikes: " << passedWublin.getLikes() << "\nHates: " << passedWublin.getHates() << '\n';
     return os;
 }
 
