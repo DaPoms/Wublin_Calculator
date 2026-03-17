@@ -10,18 +10,19 @@ int hateRadius{0};
 
 */
 
-
+void findLayout(int likeRadius, int hateRadius) //Uses Gurobi to find all the maximum polarity placements using like radius and hate radius
+{}
 
 //NOTE TO SELF: Wubbox does not have a polarity system, but we want to make sure to have some method to include them in the map (such as saving a spot for them)
 int main()
 {
     //Spaces on the map are represented by chars
     //''0'' is empty space, //30 (30 items in a column) rows __ columns
-    //Columns are traversed via Y, Rows are via X (shown in a image I made https://imgur.com/a/HIay8dw (using a outline from the msm wiki))
+    //Columns are traversed via Y, Rows are via X (shown in a image I made https://imgur.com/a/HIay8dw (made with help from an outline on the msm wiki))
 
    
     char wublinMap[30][30] = {
-    {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'},
+    {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'},
     {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'},
     {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'},
     {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'},
@@ -38,7 +39,7 @@ int main()
     {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '0', '0', '0', '0', '0'},
     {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '0', '0', '0', '0', '0'},
     {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '0', '0', '0', '0'},
-    {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '0', '0', '!'},
+    {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '0', '0', '0'},
     {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!'},
     {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!'},
     {'!', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!'},
@@ -53,8 +54,7 @@ int main()
     {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'}
     };
     
-    std::vector<Wublin> wublinPool = { //All you have to do to add a Wublin to the algorithm is to add the Wublin and their characteristics here
-//Here are what each parameter is:
+    std::vector<Wublin> wublinPool = { //All you have to do to add a Wublin to the algorithm is to add the Wublin and their characteristics here, if you want multiples of a wublin, change the count
 //Common Wublins
 //              Name:        size: Likes:        Hates:    count: ID:
         {Wublin("Brump",       2, "Fleechwurm", "Blipsqueak",  1, '1')},
@@ -122,53 +122,6 @@ int main()
         {Wublin("Epic Maulch",      3,"Epic Thwok",      "Epic Poewk",       1, 'X')},
         {Wublin("Epic Dermit",      3,"Epic Zynth",      "Epic Scargo",      1, 'Y')},
         {Wublin("Epic Gheegur",     3,"Epic Tympa",      "Epic Dermit",      1, 'Z')},
-
-
-
-        /* 
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'l')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'm')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'n')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'o')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'p')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'q')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'r')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 's')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 't')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'u')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'v')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'w')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'x')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'y')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'z')}, //34
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'A')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'B')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'C')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'D')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'E')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'F')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'G')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'H')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'I')}, //43 (the current number of wublins) */
-/*
-
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'J')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'K')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'L')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'M')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'N')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'O')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'P')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'Q')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'R')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'S')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'T')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'U')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'V')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'W')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'X')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'Y')},
-        {Wublin("Brump", 2, "Fleechwurm", "Blipsqueak", 1, 'Z')},  */ //This is the future number of wublins that are not released yet
     };
     
     for(int r{0}; r < 30; r++)
@@ -180,6 +133,5 @@ int main()
         std::cout << '\n';
     }
 
-
-    //std::cout << test;
+    // findLayout();
 }
