@@ -1,8 +1,8 @@
-application: main.o wublin.o
-	g++ main.o wublin.o -o wublayoutmaker
+application: main.obj wublin.obj
+	cl main.obj wublin.obj -o wublayoutmaker
 
-main.o: main.cpp wublin.h
-	g++ -c main.cpp
+main.obj: main.cpp wublin.h
+	cl -c main.cpp
 
-wublin.o: wublin.cpp wublin.h
-	g++ -c wublin.cpp
+wublin.obj: wublin.cpp wublin.h
+	cl -c wublin.cpp

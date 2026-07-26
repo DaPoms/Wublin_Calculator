@@ -4,7 +4,7 @@ Wublin::Wublin(std::string n, int s, std::string l, std::string h, int c, char i
 int Wublin::getCount() const {return count;}
 void Wublin::setCount(int c) {count = c;}
 int Wublin::getSize() const {return size;} 
-void Wublin::setSize(int s){size = s;}
+void Wublin::setSize(int s){size = s;} // size is in terms of radius, so 1 means 1x1 square, 2 means a 2x2, 3 means a 3x3
 std::string Wublin::getName() const {return name;}
 void Wublin::setName(std::string n){name = n;}
 std::string Wublin::getLikes() const {return likes;}

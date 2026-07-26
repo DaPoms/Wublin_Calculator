@@ -13,7 +13,7 @@ class Wublin
         char uniqueID{};
     public:
         Wublin(std::string n = "NULL", int s = -1, std::string l = "NONE", std::string h = "NONE", int c = 0, char id = '!');
-        
+
         int getSize() const;
         void setSize(int s);
         std::string getName() const;
@@ -26,8 +26,6 @@ class Wublin
         void setCount(int c);
         char getID();
         void setID(char id);
-        
-
 };
 std::ostream& operator<<(std::ostream& os, const Wublin& passedWublin);        
 
