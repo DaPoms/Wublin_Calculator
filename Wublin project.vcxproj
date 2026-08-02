@@ -112,6 +112,7 @@
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -128,14 +129,15 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mda;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mda;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mda\cplex2212.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mda\ilocplex.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mda\concert.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mda;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mda;C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mda\cplex2212.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mda\ilocplex.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mda\concert.lib;C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib\ortools_full.lib;C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib\utf8_validity.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -144,6 +146,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="wublin_calculator\wublin.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Wublin_Calculator\CMakeLists.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
