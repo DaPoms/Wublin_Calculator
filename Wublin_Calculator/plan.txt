@@ -1,0 +1,5 @@
+1.Create algorithm that finds all layouts that fufill 100% polarity across all monsters placed in a grid. This grid is an equivalent representation of the wublin island map
+    Using DFS, NOT bruteforcing
+    Allow test to be done with a variable amount of monsters
+    Make sure to create a class for the definition of a monster
+2. Create a website that holds all of these layouts, allowing the user to filter their search for layout by certain aspects
