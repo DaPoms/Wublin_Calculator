@@ -48,110 +48,283 @@ This shows how range works:
 
 */
 
-/*bool isUnclaimed(Coordinate upperLeft, Wublin )
+int indexOfWublinName(std::string wublinName, const std::vector<Wublin>& wublins)
 {
-
-}*/
-
-//Returns indexes for all wublins of the given size
-std::vector<int> calcWublinsWithGivenSize(int size, const std::vector<Wublin>& wublinPool)
-{
-    std::vector<int> wublins;
-    for (int i{0}; i < wublinPool.size(); i++)
-        if (wublinPool[i].getSize() == size)
-            wublins.push_back(i);
-    return wublins;
+    for (int i{ 0 }; i < wublins.size(); i++)
+        if (wublins[i].getName() == wublinName)
+            return i;
+    return -1;
 }
 
-/*bool contains(IloNumVar target, std::vector<int>& vect)
+//Must be done in terms of lowerRight for AddNoOverlap2D() to be supported (as size constraint for this method only supports objects defined UPWARD
+bool canFit(const Coordinate& lowerLeft, const int size, const std::map<Coordinate, std::string>& wublinMapCoordPairs) // WHY DOES upperLeft REQUIRE CONST?
+{ //check 4 corners, if all corners are part of wublinMapCoordPairs, then canFit returns true. 
+    //NOTE: This works for the wublin map but might not work for all. A placement over a C shaped grid space could technically satisfy being on all 4 corners while
+    // the inbetweens are outside of the grids
+    int distFromOtherCorners = size - 1;
+    Coordinate upperRight = Coordinate(lowerLeft.first + distFromOtherCorners, lowerLeft.second + distFromOtherCorners);
+    Coordinate lowerRight = Coordinate(lowerLeft.first + distFromOtherCorners, lowerLeft.second);
+    Coordinate upperLeft = Coordinate(lowerLeft.first, lowerLeft.second + distFromOtherCorners);
+    return wublinMapCoordPairs.contains(upperLeft) &&
+        wublinMapCoordPairs.contains(upperRight) &&
+        wublinMapCoordPairs.contains(lowerLeft) &&
+        wublinMapCoordPairs.contains(lowerRight);
+}
+
+std::vector<Coordinate> calcValidPlacements(const int size, const std::map<Coordinate, std::string>& wublinMapCoordPairs)
 {
-    for (int num : vect)
-        if (target == num)
-            return true;
-    return false;    
-}*/
+    std::vector<Coordinate> validPlacements;
+    for (const auto& [upperLeftCoord, value] : wublinMapCoordPairs)
+        if (canFit(upperLeftCoord, size, wublinMapCoordPairs))
+            validPlacements.push_back(upperLeftCoord);
+    return validPlacements;
+}
 
-void findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std::string>& wublinMapCoordPairs, const std::vector<Wublin>& wublinPool) //Uses IBM's CPLEX to find all the maximum polarity placements using like radius and hate radius
+
+
+
+
+
+
+void findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std::string>& wublinMapCoordPairs, const std::vector<Wublin>& wublinPool, const std::vector<std::vector<char>>& wublinMapArr) //Uses IBM's CPLEX to find all the maximum polarity placements using like radius and hate radius
 {
-    std::vector<int> size2Wublins = calcWublinsWithGivenSize(2, wublinPool);
-    std::vector<int> size3Wublins = calcWublinsWithGivenSize(3, wublinPool);
-    std::vector<int> size4Wublins = calcWublinsWithGivenSize(4, wublinPool);
-
-
-    //const Domain booleanType(0, 1); // CP-SAT requires all int types, so this is used to represent the int type in an integer domain
-    const Domain wublinIndexes(0, wublinPool.size() - 1); // Based off of wublinPool indexes, references the associated wublin
-    CpModelBuilder wublinProblem;
-
-    //Decision variable setup
-    std::map<Coordinate, IntVar> mapPlacementDecisions; //variable containing placement decisions for all (populatable) squares of the wublin map
-    std::vector<IntVar> wublinDecisions;
-    for (const auto& [coordinate, state] : wublinMapCoordPairs)
+    CpModelBuilder wublinProblem; // model of the wublin PROBLEM
+    const Domain xAxisRange(0, wublinMapArr[0].size());
+    const Domain yAxisRange(0, wublinMapArr.size());
+    std::vector<IntVar> wublinsXAxis; //ith index represents the ith wublin's x axis 
+    std::vector<IntVar> wublinsYAxis;
+    for (int i{ 0 }; i < wublinPool.size(); i++)
     {
-        mapPlacementDecisions[coordinate] = wublinProblem.NewIntVar(wublinIndexes).WithName("(" + std::to_string(coordinate.first) + "," + std::to_string(coordinate.second) + ")"); // Wublins are referenced by their index in the wublinPool vector. EX: At index 0 is Brump, so the state/decision variable of 1 represents brump is taking up that square
-        wublinDecisions.push_back(mapPlacementDecisions[coordinate]);
+        IntVar xAxis = wublinProblem.NewIntVar(xAxisRange).WithName(wublinPool[i].getName() + "'s x coordinate");
+        IntVar yAxis = wublinProblem.NewIntVar(yAxisRange).WithName(wublinPool[i].getName() + "'s y coordinate");
+        wublinsXAxis.push_back(xAxis);
+        wublinsYAxis.push_back(yAxis);
     }
-    wublinProblem.AddAllDifferent(wublinDecisions); // Defines there must only be 1 of each decision variable (wublin)
-    // If you want to run with > 1 of each wublin, then here are the constraints for that below (comment out the above constraint if doing this)
-    /*  
-    for (int i{0}; i < wublinPool.size(); i++) //checks how much of each wublin there is in the answer. Each wublin must have their count amount of references in the solution
+    
+    std::vector<Coordinate> size2ValidPlacements = calcValidPlacements(2, wublinMapCoordPairs);
+    std::vector<Coordinate> size3ValidPlacements = calcValidPlacements(3, wublinMapCoordPairs);
+    std::vector<Coordinate> size4ValidPlacements = calcValidPlacements(4, wublinMapCoordPairs);
+
+
+
+    // ALL OF THE BELOW CODE CAN BE COMVBINED INTO ONE FOR: for (int i{ 0 }; i < wublinPool.size(); i++)
+
+    //std::vector<TableConstraint> t;
+    for (int i{ 0 }; i < wublinPool.size(); i++) //allowd groups are x y coordinates
     {
-        int requiredCount = wublinPool[i].getCount();
-        if (!requiredCount) // if == 0
-            continue;
-
-        std::vector<BoolVar> isThisWublin;
-
-        for (int d{ 0 }; d < wublinDecisions.size(); d++)
-        {
-            BoolVar isEqual = wublinProblem.NewBoolVar();
-            wublinProblem.AddEquality(wublinDecisions[d], i).OnlyEnforceIf(isEqual); // here we effectively define how the bools will be used to count each wublin
-            wublinProblem.AddNotEqual(wublinDecisions[d], i).OnlyEnforceIf(isEqual.Not()); // defines behavior if not equal
-            isThisWublin.push_back(isEqual);
-        }
         
-        wublinProblem.AddEquality(LinearExpr::Sum(isThisWublin), requiredCount); // Note that Sum() is from google OR tools library (and is required to define sum withih a constraint)
-        
+        // 1. allowed groupings (avoids placing outside of map bounds)
+        auto wublinAllowed = wublinProblem.AddAllowedAssignments({wublinsXAxis[i], wublinsYAxis[i]});
+        if (wublinPool[i].getSize() == 2)
+            for (int i{ 0 }; i < size2ValidPlacements.size(); i++)
+            {
+                Coordinate c = size2ValidPlacements[i];
+                wublinAllowed.AddTuple({c.first, c.second});
+            }
+        else if (wublinPool[i].getSize() == 3)
+            for (int i{ 0 }; i < size3ValidPlacements.size(); i++)
+            {
+                Coordinate c = size3ValidPlacements[i];
+                wublinAllowed.AddTuple({ c.first, c.second });
+            }
+        else // This else is for size == 4, but only works for this very project (so would need to be changed if changing for a different my singing monster island
+            for (int i{ 0 }; i < size4ValidPlacements.size(); i++)
+            {
+                Coordinate c = size4ValidPlacements[i];
+                wublinAllowed.AddTuple({ c.first, c.second });
+            }
+
+        // 2. Overlap prevention constraints
+
+        // 3. Negative polarity prevention constraints
+
+        // 4. Positive polarity requirement constraints
     }
-    */
+
+    // MUST BE BEFORE HATE CODE
+    auto wublinsNoShapeOverlapConstraint = wublinProblem.AddNoOverlap2D(); 
+    std::vector<IntervalVar> xOfShapes; // TODOOOOOOOOOOO LOOK INTO IF WE EVEN NEED THESE (DO WE NEED TO REUSE?
+    std::vector<IntervalVar> yOfShapes;
+    //defines that no wublin can share the same spaces (overlap prevention)
+    for (int i{ 0 }; i < wublinPool.size(); i++)
+    {
+        xOfShapes.push_back( wublinProblem.NewIntervalVar( wublinsXAxis[i], wublinPool[i].getSize(), wublinsXAxis[i] + wublinPool[i].getSize() ) ); // X axis shape
+        yOfShapes.push_back( wublinProblem.NewIntervalVar( wublinsYAxis[i], wublinPool[i].getSize(), wublinsYAxis[i] + wublinPool[i].getSize() ) ); // Y axis shape (when combined, makes the full shape)
+        wublinsNoShapeOverlapConstraint.AddRectangle(xOfShapes[i], yOfShapes[i]); // Adds wublins spaces it takes up to the constraint of non overlap.
+    }
     //
 
-
-
-
-
-    // Defines how placements work (placement is done via upper left corner, so we need to ensure we can place all square up to bottom right corner too)
-
-/*    IloNumVar overlapConstraint; // Constraint that no wublins are allowed to overlap, so number must be kept = 0.
-    for (const auto& [coordinate, decision] : mapDecisions)
+    // No negative polarity constraint: Defines that the wublin that applies negative polarity cannot be in the negative polarity radius of the wublin which would recieve the negative polarity 
+    for (int i{ 0 }; i < wublinPool.size(); i++)
     {
+        int hatedWublinIndex = indexOfWublinName( wublinPool[i].getHates(), wublinPool);
+        if (hatedWublinIndex != -1) // If wublin has no negative polarity target, then we skip (i.e. wubbox or monoculus
+        {
+            int currWublinSize = wublinPool[i].getSize() + (2 * hateRadius);
+            auto wublinNegativePolarityConstraint = wublinProblem.AddNoOverlap2D();
+            IntervalVar currWublinHateRadiusX = wublinProblem.NewIntervalVar(wublinsXAxis[i] - hateRadius, currWublinSize, wublinsXAxis[i] - hateRadius + currWublinSize);
+            IntervalVar currWublinHateRadiusY = wublinProblem.NewIntervalVar(wublinsYAxis[i] - hateRadius, currWublinSize, wublinsYAxis[i] - hateRadius + currWublinSize);
+
+            wublinNegativePolarityConstraint.AddRectangle(xOfShapes[hatedWublinIndex],  yOfShapes[hatedWublinIndex]); //adds the hated/negative polarity source wublins physical space
+            wublinNegativePolarityConstraint.AddRectangle(currWublinHateRadiusX, currWublinHateRadiusY); // Adds the radius that the hatedWublin must be in to be considered hated (applying negative polarity)
+
+        }
+    }
+
+    // All positive polarity constraint: Defines that the wublin that applies positive polarity must be in the positive polarity radius of the wublin which would achieve positive polarity with it's presence.
     
-        
-    }*/
 
-/*    for (int i{ 0 }; i < wublinPool.size(); i++) // defines size 
+    
+  /*
+  Does this sucessfully implement the hate/negative polarity constraints?
+    // No negative polarity constraint: Defines that the wublin that applies negative polarity cannot be in the negative polarity radius of the wublin which would recieve the negative polarity 
+    for (int i{ 0 }; i < wublinPool.size(); i++)
     {
+        int hatedWublinIndex = indexOfWublinName( wublinPool[i].getHates(), wublinPool);
+        if (hatedWublinIndex != -1) // If wublin has no negative polarity target, then we skip (i.e. wubbox or monoculus
+        {
+            int currWublinSize = wublinPool[i].getSize() + (2 * hateRadius);
+            auto wublinNegativePolarityConstraint = wublinProblem.AddNoOverlap2D();
+            IntervalVar currWublinHateRadiusX = wublinProblem.NewIntervalVar(wublinsXAxis[i] - hateRadius, currWublinSize, wublinsXAxis[i] - hateRadius + currWublinSize);
+            IntervalVar currWublinHateRadiusY = wublinProblem.NewIntervalVar(wublinsYAxis[i] - hateRadius, currWublinSize, wublinsXAxis[i] - hateRadius + currWublinSize);
 
-    }*/
+            wublinNegativePolarityConstraint.AddRectangle(xOfShapes[hatedWublinIndex],  yOfShapes[hatedWublinIndex]); //adds the hated/negative polarity source wublins physical space
+            wublinNegativePolarityConstraint.AddRectangle(currWublinHateRadiusX, currWublinHateRadiusY); // Adds the radius that the hatedWublin must be in to be considered hated (applying negative polarity)
 
-    //MAKE SURE TO ACCOUNT FOR COORDINATES THAT DOING X - 1 
+        }
+    }
+    
+Every wublin has a hate radius with a unique wublin that when siad wublin is in their hate radius, the original wublin with the hate radius loses productivity. Hate radius is the distance from the actual space the wublin takes up, so for example,
+  0 0 0 0 0 0
+  0 0 0 0 0 0
+  0 0 1 1 0 0
+  0 0 1 1 0 0
+  0 0 0 0 0 0
+  0 0 0 0 0 0
+this is a 2x2 wublin with a hate radius of 2, with 1 denoting its physical space it takes and 0 being its hate radius. The constraint should ensure the hated wublin never PHSICALLY is in the hate radius
+  
+  
+  
+  */
 
-    // Need to define size constraints for each decision variable (if = 1, then size = 2x2
 
-}
+
+    // REMINDER, PLACEMENT IS DONE IN TERMS OF THE BOTTOM LEFT CORNER
+
+   
+    
 
 /*
-//Ideas of all constraints:
-    0-32 decision value (each decision NUMBER represents a different wublin (Each correlates to wublinPool[i])
-    Decision value designates the top left block of ownership
-        When placing, you must check that all occupied spaces do not overlap (for the entire space the wublin takes up
-            This is done via making sure the to be placed box (which means its entire size, for example, 2x2) is NOT <= the highest ordered pair
-            that can be made between the upper left and lower right (EX: (0,2) and (2,0) makes (2,2)) AND NOT >= the lowest coordinate that can be made from the min x and y values of the upper left and lower right (in this example, 0,0). If both are true, then it means the coordinate pair is within an already taken space.
-    Each decision value must be in a size x size pattern (in terms of claiming coordinate pairs)
-    Each decision vlaue must not overlap/overwrite with any other decision value
-    Every decision value must have their positive polarity counterpart within radius (counnt = wubinPool.size())
-    Every decision value must have their negative polarity counterpart NOT within radius (count = 0)
- */
+*  0 0 0 0 0 0
+*  0 0 0 0 0 0
+*  0 0 1 1 0 0
+*  0 0 1 1 0 0
+*  0 0 0 0 0 0
+*  0 0 0 0 0 0
+* 
+*  0 0 0 0 0 0 0
+*  0 0 0 0 0 0 0
+*  0 0 1 1 1 0 0
+*  0 0 1 1 1 0 0
+*  0 0 1 1 1 0 0 
+*  0 0 0 0 0 0 0
+*  0 0 0 0 0 0 0
+*  
+! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 9
+! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 8 
+! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 7
+! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 6
+! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 ! ! ! ! 0 0 ! ! ! ! ! ! ! ! 5
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 4
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 3
+! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 2
+! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 0 0 0 0 0 ! ! ! ! 1 
+! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 0 0 0 0 0 ! ! ! ! 0 
+! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! 0 0 0 0 ! ! ! ! ! 9
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 8
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 7 
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 0 0 0 0 6
+0 0 0 0 0 0 0 0 0 0 D D D 0 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 5
+0 0 0 0 0 0 0 0 0 0 D D D 0 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 4 
+0 0 0 0 0 0 0 0 0 0 D D D 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 0 0 3
+0 0 0 0 0 0 0 0 0 0 B B 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 0 0 2 
+0 0 0 0 0 0 0 0 0 0 B B 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! 1
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! 0 
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 9
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 8
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 7
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 6
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 5
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 4
+! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 3
+! ! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 2
+! ! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! 1
+! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! 0
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
+*/
 
+
+
+/*
+! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 9
+! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 8
+! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 7
+! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 6
+! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 ! ! ! ! 0 0 ! ! ! ! ! ! ! ! 5
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 4
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 3
+! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 2 
+! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 0 0 0 0 0 ! ! ! ! 1
+! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 0 0 0 0 0 ! ! ! ! 0
+! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! 0 0 0 0 ! ! ! ! ! 9
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 8 
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 7
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 0 0 0 0 6
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 5
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 4
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 0 0 3
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 0 0 2
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! 1
+0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! 0
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 9
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 8
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 7
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 6
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 5
+! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 4
+! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 3
+! ! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 2
+! ! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! 1
+! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! 0
+0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8
+*/
+  
+    // Negative polarity is just another set of AddNoOverlap2D but done in sets of 2 instead
+    // Positive polarity we have to figure out how to do the inverse of NoOverlap2d to say RequireOverlap2D
+
+
+
+    // Solver params + running
+    Model model; // model for the SOLVER
+    
+    model.Add(NewFeasibleSolutionObserver([&](const CpSolverResponse& result) 
+    { // This logs ALL the feasible solutions the solver comes across
+            // TODO: Add here how I want to log/extract the solutions
+            LOG(INFO) << "Wublin solution:";
+            for (int i{ 0 }; i < wublinPool.size(); i++)       
+                LOG(INFO) << wublinPool[i].getName() << " = (" << SolutionIntegerValue(result, wublinsXAxis[i]) << "," << SolutionIntegerValue(result, wublinsYAxis[i]) << ")";
+            
+    }));
+    SatParameters params;
+    //params.set_max_time_in_seconds(86400);
+    params.set_max_time_in_seconds(60);
+    model.Add(NewSatParameters(params));
+    const CpSolverResponse result = SolveCpModel(wublinProblem.Build(), &model); // solves problem and stores result
+    //
+    
+
+
+}
 
 //In converting from array representation to a coordinate based map, the coordinates are made with the bottom left being (0,0). Going right increases the x and up increases the y.
 std::map<Coordinate,std::string> wublinArrToCoordinatePairMap(std::vector<std::vector<char>>& wublinMapArrForm)
@@ -178,8 +351,8 @@ std::map<Coordinate,std::string> wublinArrToCoordinatePairMap(std::vector<std::v
 int main()
 {
 
-    int likeRadius{ 0 };
-    int hateRadius{ 0 };
+    int likeRadius{ 2 };
+    int hateRadius{ 2 };
 
     //Map is traversed via and X and Y axis systen. (shown in a image I made: https://imgur.com/a/SoHMJGK (made with help from an outline on the msm wiki))
 
@@ -298,7 +471,86 @@ int main()
         std::cout << '\n';
     }
 
-    std::map<Coordinate,std::string> wublinMap = wublinArrToCoordinatePairMap(wublinMapArr);
-  
-    // findLayouts();
+    std::map<Coordinate,std::string> wublinMapCoordPairs = wublinArrToCoordinatePairMap(wublinMapArr);
+
+
+    findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr);
 }
+
+
+
+// Answer should probably be stored as a vector of coordinates, with the ith index of the vector representing the ith wublin from the wublinPool vector
+
+
+
+
+/*
+I0000 00:00:1786117005.898851   19396 main.cpp:249] Wublin solution:
+I0000 00:00:1786117005.906586   19396 main.cpp:251] Brump = (12,28)
+I0000 00:00:1786117005.909867   19396 main.cpp:251] Zynth = (20,7)
+I0000 00:00:1786117005.910832   19396 main.cpp:251] Zuuker = (3,14)
+I0000 00:00:1786117005.911065   19396 main.cpp:251] Blipsqueak = (10,11) THIS
+I0000 00:00:1786117005.911290   19396 main.cpp:251] Bona-Petite = (4,6)
+I0000 00:00:1786117005.911481   19396 main.cpp:251] Poewk = (8,1)
+I0000 00:00:1786117005.911686   19396 main.cpp:251] Screemu = (1,12)
+I0000 00:00:1786117005.911896   19396 main.cpp:251] Tympa = (4,16)
+I0000 00:00:1786117005.912197   19396 main.cpp:251] Creepuscule = (10,4)
+I0000 00:00:1786117005.912417   19396 main.cpp:251] Whajje = (19,23)
+I0000 00:00:1786117005.912580   19396 main.cpp:251] Astropod = (13,26)
+I0000 00:00:1786117005.912782   19396 main.cpp:251] Pixolotl = (9,7)
+I0000 00:00:1786117005.912997   19396 main.cpp:251] Monculus = (15,26)
+I0000 00:00:1786117005.913198   19396 main.cpp:251] Thwok = (10,9)
+I0000 00:00:1786117005.913384   19396 main.cpp:251] Dwumrohl = (10,13) THIS
+I0000 00:00:1786117005.913554   19396 main.cpp:251] Scargo = (17,12)
+I0000 00:00:1786117005.914319   19396 main.cpp:251] Fleechwurm = (13,4)
+I0000 00:00:1786117005.914522   19396 main.cpp:251] Maulch = (26,14)
+I0000 00:00:1786117005.914734   19396 main.cpp:251] Dermit = (9,16)
+I0000 00:00:1786117005.914930   19396 main.cpp:251] Gheegur = (4,3)
+I0000 00:00:1786117005.915139   19396 main.cpp:251] Wubbox = (11,0)
+I0000 00:00:1786117005.916512   19396 main.cpp:251] Rare Brump = (5,14)
+I0000 00:00:1786117005.917403   19396 main.cpp:251] Rare Zynth = (14,17)
+I0000 00:00:1786117005.917897   19396 main.cpp:251] Rare Zuuker = (6,1)
+I0000 00:00:1786117005.918160   19396 main.cpp:251] Rare Blipsqueak = (1,10)
+I0000 00:00:1786117005.918369   19396 main.cpp:251] Rare Bona-Petite = (20,13)
+I0000 00:00:1786117005.918571   19396 main.cpp:251] Rare Poewk = (0,14)
+I0000 00:00:1786117005.918766   19396 main.cpp:251] Rare Screemu = (1,17)
+I0000 00:00:1786117005.918966   19396 main.cpp:251] Rare Tympa = (11,7)
+I0000 00:00:1786117005.919748   19396 main.cpp:251] Rare Creepuscule = (16,4)
+I0000 00:00:1786117005.920119   19396 main.cpp:251] Rare Whajje = (19,21)
+I0000 00:00:1786117005.920375   19396 main.cpp:251] Rare Astropod = (4,1)
+I0000 00:00:1786117005.920520   19396 main.cpp:251] Rare Pixolotl = (27,12)
+I0000 00:00:1786117005.920672   19396 main.cpp:251] Rare Monculus = (12,16)
+I0000 00:00:1786117005.920825   19396 main.cpp:251] Rare Thwok = (1,4)
+I0000 00:00:1786117005.920975   19396 main.cpp:251] Rare Dwumrohl = (16,7)
+I0000 00:00:1786117005.921391   19396 main.cpp:251] Rare Scargo = (12,10)
+I0000 00:00:1786117005.921612   19396 main.cpp:251] Rare Fleechwurm = (13,7)
+I0000 00:00:1786117005.921938   19396 main.cpp:251] Rare Maulch = (13,20)
+I0000 00:00:1786117005.922162   19396 main.cpp:251] Rare Dermit = (3,11)
+I0000 00:00:1786117005.923790   19396 main.cpp:251] Rare Gheegur = (7,4)
+I0000 00:00:1786117005.924254   19396 main.cpp:251] Rare Wubbox = (21,19)
+I0000 00:00:1786117005.924759   19396 main.cpp:251] Epic Brump = (17,10)
+I0000 00:00:1786117005.925292   19396 main.cpp:251] Epic Zynth = (17,1)
+I0000 00:00:1786117005.926064   19396 main.cpp:251] Epic Zuuker = (7,7)
+I0000 00:00:1786117005.926469   19396 main.cpp:251] Epic Blipsqueak = (4,9)
+I0000 00:00:1786117005.927071   19396 main.cpp:251] Epic Bona-Petite = (7,13)
+I0000 00:00:1786117005.927742   19396 main.cpp:251] Epic Poewk = (13,13)
+I0000 00:00:1786117005.927956   19396 main.cpp:251] Epic Screemu = (19,2)
+I0000 00:00:1786117005.928173   19396 main.cpp:251] Epic Tympa = (14,28)
+I0000 00:00:1786117005.928423   19396 main.cpp:251] Epic Creepuscule = (19,9)
+I0000 00:00:1786117005.928651   19396 main.cpp:251] Epic Whajje = (21,23)
+I0000 00:00:1786117005.929770   19396 main.cpp:251] Epic Astropod = (15,10)
+I0000 00:00:1786117005.930049   19396 main.cpp:251] Epic Pixolotl = (23,23)
+I0000 00:00:1786117005.930253   19396 main.cpp:251] Epic Monculus = (15,0)
+I0000 00:00:1786117005.930902   19396 main.cpp:251] Epic Thwok = (15,2)
+I0000 00:00:1786117005.931103   19396 main.cpp:251] Epic Dwumrohl = (10,19)
+I0000 00:00:1786117005.932229   19396 main.cpp:251] Epic Scargo = (19,4)
+I0000 00:00:1786117005.936046   19396 main.cpp:251] Epic Fleechwurm = (6,16)
+I0000 00:00:1786117005.940839   19396 main.cpp:251] Epic Maulch = (6,19)
+I0000 00:00:1786117005.941088   19396 main.cpp:251] Epic Dermit = (1,6)
+I0000 00:00:1786117005.941474   19396 main.cpp:251] Epic Gheegur = (3,18)
+I0000 00:00:1786117005.942298   19396 main.cpp:251] Epic Wubbox = (6,9)
+
+
+
+
+*/

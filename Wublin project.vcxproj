@@ -109,16 +109,19 @@
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
     <ClCompile>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_WINDOWS;_ITERATOR_DEBUG_LEVEL=0
+;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mdd;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mdd;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mdd\cplex2212.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mdd\ilocplex.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mdd\concert.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mdd;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mdd;C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mdd\cplex2212.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\cplex\lib\x64_windows_msvc14\stat_mdd\ilocplex.lib;C:\Program Files\IBM\ILOG\CPLEX_Studio_Community2212\concert\lib\x64_windows_msvc14\stat_mdd\concert.lib;C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib\ortools_full.lib;C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib\utf8_validity.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
