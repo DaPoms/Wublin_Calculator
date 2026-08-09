@@ -20,6 +20,13 @@ using namespace operations_research; //this is fine so long as you don't make/us
 using namespace operations_research::sat;
 
 
+
+// TODO: MAKE SURE TO ADD CONDITION OF: If hateradius = 0, then SKIP ASSIGNING THE CONSTRAINTS
+// HUGE TODO: Need to research rare + epic hate relationship with the rarities below it (it appear to be MUCH more complicated than thought)
+// Current theory is that we need to add to hate constraints all the rarities of the negative polarity monster in the veto list
+// Possibly still allow my current layout settings but add a filter to show only solutions that have NO harm on polarity at ALL (in my release version)
+
+
 // NOTE: Make sure to randomize CPLEX as CPLEX is deterministic, so otherwise, the same solution will be found each time
 // OR look into increasing solution pool size
 // NOTE: I want to add ability to separate various solutions to the problem by which stage the user has (as it can take a long time to achieve each stage)
@@ -70,6 +77,20 @@ bool canFit(const Coordinate& lowerLeft, const int size, const std::map<Coordina
         wublinMapCoordPairs.contains(lowerLeft) &&
         wublinMapCoordPairs.contains(lowerRight);
 }
+
+bool isOccupiedSpace(const Coordinate& lowerLeft, const int size, const std::map<Coordinate, std::string>& wublinMapCoordPairs)
+{
+    int distFromOtherCorners = size - 1;
+    Coordinate upperRight = Coordinate(lowerLeft.first + distFromOtherCorners, lowerLeft.second + distFromOtherCorners);
+    Coordinate lowerRight = Coordinate(lowerLeft.first + distFromOtherCorners, lowerLeft.second);
+    Coordinate upperLeft = Coordinate(lowerLeft.first, lowerLeft.second + distFromOtherCorners);
+    return wublinMapCoordPairs.contains(upperLeft) &&
+        wublinMapCoordPairs.contains(upperRight) &&
+        wublinMapCoordPairs.contains(lowerLeft) &&
+        wublinMapCoordPairs.contains(lowerRight);
+}
+
+
 
 std::vector<Coordinate> calcValidPlacements(const int size, const std::map<Coordinate, std::string>& wublinMapCoordPairs)
 {
@@ -173,39 +194,99 @@ void findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std:
 
     // All positive polarity constraint: Defines that the wublin that applies positive polarity must be in the positive polarity radius of the wublin which would achieve positive polarity with it's presence.
     
+    // impelemented via setting ranges that the liked wublin must be from the current wublin
 
-    
-  /*
-  Does this sucessfully implement the hate/negative polarity constraints?
-    // No negative polarity constraint: Defines that the wublin that applies negative polarity cannot be in the negative polarity radius of the wublin which would recieve the negative polarity 
+    /*  General idea:
+    * NOTE: This functionality is inspired/was learned of by this resource: https://www.geeksforgeeks.org/dsa/find-two-rectangles-overlap/
+    * IF x of bottom right corner (highest x coordinate) of one square is < the others upper left x (the lowest x value of the square), then NO overlapping is occuring (also check vise versa)
+    * IF the y of the top left of one square (the highest y of the square) is < the y of the bottom right of the other square (lowest point of square), then the squares are not overlapping
+    * ANY other case entails overlap is occuring
+    */
     for (int i{ 0 }; i < wublinPool.size(); i++)
     {
-        int hatedWublinIndex = indexOfWublinName( wublinPool[i].getHates(), wublinPool);
-        if (hatedWublinIndex != -1) // If wublin has no negative polarity target, then we skip (i.e. wubbox or monoculus
-        {
-            int currWublinSize = wublinPool[i].getSize() + (2 * hateRadius);
-            auto wublinNegativePolarityConstraint = wublinProblem.AddNoOverlap2D();
-            IntervalVar currWublinHateRadiusX = wublinProblem.NewIntervalVar(wublinsXAxis[i] - hateRadius, currWublinSize, wublinsXAxis[i] - hateRadius + currWublinSize);
-            IntervalVar currWublinHateRadiusY = wublinProblem.NewIntervalVar(wublinsYAxis[i] - hateRadius, currWublinSize, wublinsXAxis[i] - hateRadius + currWublinSize);
+        int likedWublinindex = indexOfWublinName(wublinPool[i].getLikes(), wublinPool); //holds which wublin index references the liked wublin
+        if (likedWublinindex == -1) // skip if wublin does not have positive polarity
+            continue;
+        
+        LinearExpr upperLeftOfLikeRadiusX = wublinsXAxis[i] - likeRadius;
+        LinearExpr upperLeftOfLikeRadiusY = wublinsYAxis[i] + (wublinPool[i].getSize() - 1) + likeRadius;
+        LinearExpr lowerRightOfLikeRadiusX = wublinsXAxis[i] + (wublinPool[i].getSize() - 1) + likeRadius; 
+        LinearExpr lowerRightOfLikeRadiusY = wublinsYAxis[i] - likeRadius;
 
-            wublinNegativePolarityConstraint.AddRectangle(xOfShapes[hatedWublinIndex],  yOfShapes[hatedWublinIndex]); //adds the hated/negative polarity source wublins physical space
-            wublinNegativePolarityConstraint.AddRectangle(currWublinHateRadiusX, currWublinHateRadiusY); // Adds the radius that the hatedWublin must be in to be considered hated (applying negative polarity)
+        // Because the placement decisions are on the bottom left, traversal goes right and up in this nested for loop
+        LinearExpr upperLeftOfDesiredWublinX = wublinsXAxis[likedWublinindex]; // desired wublin is the one that the ith wublin requires to be in proximity in order to achieve positive polarity
+        LinearExpr upperLeftOfDesiredWublinY = wublinsYAxis[likedWublinindex] + wublinPool[likedWublinindex].getSize() - 1;
+        LinearExpr lowerRightOfDesiredWublinX = wublinsXAxis[likedWublinindex] + wublinPool[likedWublinindex].getSize() - 1; // desired wublin is the one that the ith wublin requires to be in proximity in order to achieve positive polarity
+        LinearExpr lowerRightOfDesiredWublinY = wublinsYAxis[likedWublinindex];
+       
+        // All conditions must be met for overlap to occur
+        wublinProblem.AddGreaterOrEqual(lowerRightOfLikeRadiusX, upperLeftOfDesiredWublinX); 
+        wublinProblem.AddGreaterOrEqual(lowerRightOfDesiredWublinX, upperLeftOfLikeRadiusX);
+        wublinProblem.AddGreaterOrEqual(upperLeftOfLikeRadiusY, lowerRightOfDesiredWublinY);
+        wublinProblem.AddGreaterOrEqual(upperLeftOfDesiredWublinY, lowerRightOfLikeRadiusY);   
+    }
+
+
+/* ( LOOK INTO DOING DOUBLE RANGE BASED SYSTEM
+*         | This gives the min x, max y
+*         V
+        (0,2) (1,2) (2,2)
+        (0,1) (1,1) (2,1)
+        (0,0)  (1,0) (2,0) // this gets max x, min y
+
+
+*  |
+*  (0,0)
+* 
+* Square name = 2
+*  (0,3) Upper left = UL2
+*  (1,2) Lower right = LR2
+* 
+* Square name = 1
+*  (1,5) upper left = UL1
+*  (6,0) Lower right = LR1
+* 
+* 
+        
+* 
+* 
+* Does overlap = YES
+* 
+* 
+*/
+
+
+/*
+       std::vector<LinearExpr> likeRadiusSquaresX; // contains all coordinates of like radius for the i-th wublin. The ith index of this vector matches with the ith index of the likeRadiusSquaresY for defining a single square coordiante
+        std::vector<LinearExpr> likeRadiusSquaresY;
+
+        int likedWublinindex = indexOfWublinName(wublinPool[i].getLikes(), wublinPool); //holds which wublin index references the liked wublin
+        LinearExpr upperLeftOfLikeRadiusX = wublinsXAxis[i] - likeRadius;
+        LinearExpr upperLeftOfLikeRadiusY = wublinsYAxis[i] + (wublinPool[i].getSize() - 1) + likeRadius;
+
+        int squareNumber = wublinPool[i].getSize() + (2 * likeRadius);
+        int rowI{ 0 }; // traverses rows
+        int colI{ 0 }; //traverses col of like radius
+        for (int t{ 0 }; t < squareNumber * squareNumber ; t++) // For loop for each square of the like radius
+        {
+            if(isOccupiedSpace()) // leaves out the physical squares the wublin takes up
+            likeRadiusSquaresX.push_back(upperLeftOfLikeRadiusX + colI);
+            likeRadiusSquaresY.push_back(upperLeftOfLikeRadiusY - rowI);
+
+
+            if (t % (squareNumber - 1)) //case of reaching end of row
+            {
+                rowI++;
+                colI = 0;
+            }
 
         }
-    }
-    
-Every wublin has a hate radius with a unique wublin that when siad wublin is in their hate radius, the original wublin with the hate radius loses productivity. Hate radius is the distance from the actual space the wublin takes up, so for example,
-  0 0 0 0 0 0
-  0 0 0 0 0 0
-  0 0 1 1 0 0
-  0 0 1 1 0 0
-  0 0 0 0 0 0
-  0 0 0 0 0 0
-this is a 2x2 wublin with a hate radius of 2, with 1 denoting its physical space it takes and 0 being its hate radius. The constraint should ensure the hated wublin never PHSICALLY is in the hate radius
-  
-  
-  
-  */
+        
+        */
+
+
+
+
 
 
 
@@ -214,7 +295,9 @@ this is a 2x2 wublin with a hate radius of 2, with 1 denoting its physical space
    
     
 
-/*
+/* Go from bottom left to upper left radius via: 
+lowerLeftYCoord + ( (size - 1) + likeRadius) 
+lowerLeftXCoord - likeRadius
 *  0 0 0 0 0 0
 *  0 0 0 0 0 0
 *  0 0 1 1 0 0
@@ -234,30 +317,30 @@ this is a 2x2 wublin with a hate radius of 2, with 1 denoting its physical space
 ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 8 
 ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 7
 ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! 6
-! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 ! ! ! ! 0 0 ! ! ! ! ! ! ! ! 5
-! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 4
-! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 3
-! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! 0 0 0 0 0 0 ! ! ! ! ! 2
-! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 0 0 0 0 0 ! ! ! ! 1 
-! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 0 0 0 0 0 ! ! ! ! 0 
+! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 ! ! ! ! M M ! ! ! ! ! ! ! ! 5
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 M M 0 0 0 ! ! ! ! ! 4
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 0 0 W W W W ! ! ! ! ! 3
+! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 ! ! ! 0 0 W W W W ! ! ! ! ! 2
+! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 W W W W 0 ! ! ! ! 1 
+! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 W W W W 0 ! ! ! ! 0 
 ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! 0 0 0 0 ! ! ! ! ! 9
 ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 8
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 7 
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 0 0 0 0 6
-0 0 0 0 0 0 0 0 0 0 D D D 0 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 5
-0 0 0 0 0 0 0 0 0 0 D D D 0 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 4 
-0 0 0 0 0 0 0 0 0 0 D D D 0 0 0 0 0 0 0 0 0 0 ! ! ! 0 0 0 0 3
-0 0 0 0 0 0 0 0 0 0 B B 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! 0 0 0 2 
-0 0 0 0 0 0 0 0 0 0 B B 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! 1
-0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! 0 
-! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 9
-! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 8
-! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 7
-! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 6
-! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 5
-! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 4
-! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 3
-! ! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 2
+0 0 0 0 0 0 0 0 0 0 0 G G G 0 0 ! ! ! ! ! ! ! ! ! ! ! ! ! ! 7 
+0 0 0 0 0 0 0 0 D D D G G G 0 0 0 ! ! ! ! ! ! ! ! ! 0 0 0 0 6
+0 0 0 C C C z z D D D G G G 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 5
+0 0 0 C C C z z D D D 0 Z Z 0 0 0 0 0 0 0 0 0 ! ! 0 0 0 0 0 4 
+0 0 0 C C C 0 A A 0 0 0 Z Z 0 T T 0 0 0 0 0 0 ! ! ! 0 0 0 0 3
+0 0 0 B B W W A A 0 0 0 D D D T T 0 0 0 0 0 0 ! ! ! ! 0 0 0 2 
+S S 0 B B W W 0 0 0 0 0 D D D P P P 0 0 0 0 0 ! ! ! ! ! ! ! 1
+S S 0 0 S S S P P P 0 0 D D D P P P 0 0 0 0 0 ! ! ! ! ! ! ! 0 
+! 0 0 0 S S S P P P 0 b b 0 0 P P P 0 0 0 0 ! ! ! ! ! ! ! ! 9
+! 0 0 0 S S S P P P 0 b b 0 0 T T 0 0 0 0 0 ! ! ! ! ! ! ! ! 8
+! 0 0 0 0 P P 0 0 0 U U B B 0 T T 0 0 0 0 0 ! ! ! ! ! ! ! ! 7
+! 0 0 0 0 P P 0 0 0 U U B B 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 6
+! 0 0 0 0 0 0 0 0 0 0 M M M 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 5
+! 0 0 0 0 0 0 0 F F F M M M 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 4
+! ! ! 0 0 0 0 0 F F F M M M 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! 3
+! ! ! ! 0 0 0 0 F F F 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! 2
 ! ! ! ! 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! 1
 ! ! ! ! ! ! ! ! ! ! 0 0 0 0 0 0 0 0 ! ! ! ! ! ! ! ! ! ! ! ! 0
 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9
@@ -305,19 +388,20 @@ this is a 2x2 wublin with a hate radius of 2, with 1 denoting its physical space
 
 
     // Solver params + running
+    std::cout << "Started solving!";
     Model model; // model for the SOLVER
     
     model.Add(NewFeasibleSolutionObserver([&](const CpSolverResponse& result) 
     { // This logs ALL the feasible solutions the solver comes across
             // TODO: Add here how I want to log/extract the solutions
-            LOG(INFO) << "Wublin solution:";
+            std::cout << "Wublin solution:" << std::endl;
             for (int i{ 0 }; i < wublinPool.size(); i++)       
-                LOG(INFO) << wublinPool[i].getName() << " = (" << SolutionIntegerValue(result, wublinsXAxis[i]) << "," << SolutionIntegerValue(result, wublinsYAxis[i]) << ")";
+                std::cout << wublinPool[i].getName() << " = (" << SolutionIntegerValue(result, wublinsXAxis[i]) << "," << SolutionIntegerValue(result, wublinsYAxis[i]) << ")" << std::endl;
             
     }));
     SatParameters params;
     //params.set_max_time_in_seconds(86400);
-    params.set_max_time_in_seconds(60);
+    params.set_max_time_in_seconds(300);
     model.Add(NewSatParameters(params));
     const CpSolverResponse result = SolveCpModel(wublinProblem.Build(), &model); // solves problem and stores result
     //
@@ -475,82 +559,79 @@ int main()
 
 
     findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr);
+    std::cout << "DONE!";
 }
 
 
 
 // Answer should probably be stored as a vector of coordinates, with the ith index of the vector representing the ith wublin from the wublinPool vector
 
-
-
-
 /*
-I0000 00:00:1786117005.898851   19396 main.cpp:249] Wublin solution:
-I0000 00:00:1786117005.906586   19396 main.cpp:251] Brump = (12,28)
-I0000 00:00:1786117005.909867   19396 main.cpp:251] Zynth = (20,7)
-I0000 00:00:1786117005.910832   19396 main.cpp:251] Zuuker = (3,14)
-I0000 00:00:1786117005.911065   19396 main.cpp:251] Blipsqueak = (10,11) THIS
-I0000 00:00:1786117005.911290   19396 main.cpp:251] Bona-Petite = (4,6)
-I0000 00:00:1786117005.911481   19396 main.cpp:251] Poewk = (8,1)
-I0000 00:00:1786117005.911686   19396 main.cpp:251] Screemu = (1,12)
-I0000 00:00:1786117005.911896   19396 main.cpp:251] Tympa = (4,16)
-I0000 00:00:1786117005.912197   19396 main.cpp:251] Creepuscule = (10,4)
-I0000 00:00:1786117005.912417   19396 main.cpp:251] Whajje = (19,23)
-I0000 00:00:1786117005.912580   19396 main.cpp:251] Astropod = (13,26)
-I0000 00:00:1786117005.912782   19396 main.cpp:251] Pixolotl = (9,7)
-I0000 00:00:1786117005.912997   19396 main.cpp:251] Monculus = (15,26)
-I0000 00:00:1786117005.913198   19396 main.cpp:251] Thwok = (10,9)
-I0000 00:00:1786117005.913384   19396 main.cpp:251] Dwumrohl = (10,13) THIS
-I0000 00:00:1786117005.913554   19396 main.cpp:251] Scargo = (17,12)
-I0000 00:00:1786117005.914319   19396 main.cpp:251] Fleechwurm = (13,4)
-I0000 00:00:1786117005.914522   19396 main.cpp:251] Maulch = (26,14)
-I0000 00:00:1786117005.914734   19396 main.cpp:251] Dermit = (9,16)
-I0000 00:00:1786117005.914930   19396 main.cpp:251] Gheegur = (4,3)
-I0000 00:00:1786117005.915139   19396 main.cpp:251] Wubbox = (11,0)
-I0000 00:00:1786117005.916512   19396 main.cpp:251] Rare Brump = (5,14)
-I0000 00:00:1786117005.917403   19396 main.cpp:251] Rare Zynth = (14,17)
-I0000 00:00:1786117005.917897   19396 main.cpp:251] Rare Zuuker = (6,1)
-I0000 00:00:1786117005.918160   19396 main.cpp:251] Rare Blipsqueak = (1,10)
-I0000 00:00:1786117005.918369   19396 main.cpp:251] Rare Bona-Petite = (20,13)
-I0000 00:00:1786117005.918571   19396 main.cpp:251] Rare Poewk = (0,14)
-I0000 00:00:1786117005.918766   19396 main.cpp:251] Rare Screemu = (1,17)
-I0000 00:00:1786117005.918966   19396 main.cpp:251] Rare Tympa = (11,7)
-I0000 00:00:1786117005.919748   19396 main.cpp:251] Rare Creepuscule = (16,4)
-I0000 00:00:1786117005.920119   19396 main.cpp:251] Rare Whajje = (19,21)
-I0000 00:00:1786117005.920375   19396 main.cpp:251] Rare Astropod = (4,1)
-I0000 00:00:1786117005.920520   19396 main.cpp:251] Rare Pixolotl = (27,12)
-I0000 00:00:1786117005.920672   19396 main.cpp:251] Rare Monculus = (12,16)
-I0000 00:00:1786117005.920825   19396 main.cpp:251] Rare Thwok = (1,4)
-I0000 00:00:1786117005.920975   19396 main.cpp:251] Rare Dwumrohl = (16,7)
-I0000 00:00:1786117005.921391   19396 main.cpp:251] Rare Scargo = (12,10)
-I0000 00:00:1786117005.921612   19396 main.cpp:251] Rare Fleechwurm = (13,7)
-I0000 00:00:1786117005.921938   19396 main.cpp:251] Rare Maulch = (13,20)
-I0000 00:00:1786117005.922162   19396 main.cpp:251] Rare Dermit = (3,11)
-I0000 00:00:1786117005.923790   19396 main.cpp:251] Rare Gheegur = (7,4)
-I0000 00:00:1786117005.924254   19396 main.cpp:251] Rare Wubbox = (21,19)
-I0000 00:00:1786117005.924759   19396 main.cpp:251] Epic Brump = (17,10)
-I0000 00:00:1786117005.925292   19396 main.cpp:251] Epic Zynth = (17,1)
-I0000 00:00:1786117005.926064   19396 main.cpp:251] Epic Zuuker = (7,7)
-I0000 00:00:1786117005.926469   19396 main.cpp:251] Epic Blipsqueak = (4,9)
-I0000 00:00:1786117005.927071   19396 main.cpp:251] Epic Bona-Petite = (7,13)
-I0000 00:00:1786117005.927742   19396 main.cpp:251] Epic Poewk = (13,13)
-I0000 00:00:1786117005.927956   19396 main.cpp:251] Epic Screemu = (19,2)
-I0000 00:00:1786117005.928173   19396 main.cpp:251] Epic Tympa = (14,28)
-I0000 00:00:1786117005.928423   19396 main.cpp:251] Epic Creepuscule = (19,9)
-I0000 00:00:1786117005.928651   19396 main.cpp:251] Epic Whajje = (21,23)
-I0000 00:00:1786117005.929770   19396 main.cpp:251] Epic Astropod = (15,10)
-I0000 00:00:1786117005.930049   19396 main.cpp:251] Epic Pixolotl = (23,23)
-I0000 00:00:1786117005.930253   19396 main.cpp:251] Epic Monculus = (15,0)
-I0000 00:00:1786117005.930902   19396 main.cpp:251] Epic Thwok = (15,2)
-I0000 00:00:1786117005.931103   19396 main.cpp:251] Epic Dwumrohl = (10,19)
-I0000 00:00:1786117005.932229   19396 main.cpp:251] Epic Scargo = (19,4)
-I0000 00:00:1786117005.936046   19396 main.cpp:251] Epic Fleechwurm = (6,16)
-I0000 00:00:1786117005.940839   19396 main.cpp:251] Epic Maulch = (6,19)
-I0000 00:00:1786117005.941088   19396 main.cpp:251] Epic Dermit = (1,6)
-I0000 00:00:1786117005.941474   19396 main.cpp:251] Epic Gheegur = (3,18)
-I0000 00:00:1786117005.942298   19396 main.cpp:251] Epic Wubbox = (6,9)
+Brump = (12,6) X
+Zynth = (12,13) X
+Zuuker = (10,6) X
+Blipsqueak = (3,11) X
+Bona-Petite = (7,8) X
+Poewk = (15,9) X
+Screemu = (0,10) X
+Tympa = (15,12) X
+Creepuscule = (3,13) X
+Whajje = (5,11) X
+Astropod = (7,12) X
+Pixolotl = (5,6) X
+Monculus = (20,24) X
+Thwok = (15,7) X
+Dwumrohl = (8,14) x
+Scargo = (4,8) X
+Fleechwurm = (8,2) X
+Maulch = (11,3) x
+Dermit = (12,10) X
+Gheegur = (11,15) X
+Wubbox = (21,20) x
 
-
-
+Rare Brump = (11,8) x
+Rare Zynth = (6,14)
+Rare Zuuker = (2,19)
+Rare Blipsqueak = (3,3)
+Rare Bona-Petite = (2,16)
+Rare Poewk = (14,4)
+Rare Screemu = (1,4)
+Rare Tympa = (13,8)
+Rare Creepuscule = (1,6)
+Rare Whajje = (2,9)
+Rare Astropod = (0,15)
+Rare Pixolotl = (5,4)
+Rare Monculus = (19,21)
+Rare Thwok = (8,17)
+Rare Dwumrohl = (0,12)
+Rare Scargo = (5,1)
+Rare Fleechwurm = (7,5)
+Rare Maulch = (4,19)
+Rare Dermit = (5,16)
+Rare Gheegur = (9,11)
+Rare Wubbox = (13,26)
+Epic Brump = (20,4)
+Epic Zynth = (14,2)
+Epic Zuuker = (20,13)
+Epic Blipsqueak = (12,18)
+Epic Bona-Petite = (17,13)
+Epic Poewk = (16,1)
+Epic Screemu = (10,20)
+Epic Tympa = (14,0)
+Epic Creepuscule = (7,19)
+Epic Whajje = (10,18)
+Epic Astropod = (14,17)
+Epic Pixolotl = (18,11)
+Epic Monculus = (19,2)
+Epic Thwok = (17,7)
+Epic Dwumrohl = (13,20)
+Epic Scargo = (14,14)
+Epic Fleechwurm = (19,7)
+Epic Maulch = (20,10)
+Epic Dermit = (17,4)
+Epic Gheegur = (11,0)
+Epic Wubbox = (26,13)
 
 */
+
+
