@@ -10,7 +10,7 @@ This program requires Google's OR tools API for c++ and was made in Visual Studi
 1. Download binary (version 9.11 or less, as ortools_full.lib is defunct in modern versions)
 2. Open in file explorer 
 3. In vs project settings do:
-### Project > Properties > C/C++ > Additional Include Directories 
+### C/C++ > Additional Include Directories 
 Enter C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\include 
 ### Linker > General > Additional library directories 
 Enter C:\or-tools_x64_VisualStudio2022_cpp_v9.11.4210\lib 
