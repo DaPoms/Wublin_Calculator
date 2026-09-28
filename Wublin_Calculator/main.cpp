@@ -18,7 +18,14 @@ using Coordinate = std::pair<int, int>; // type alias
 using namespace operations_research; //this is fine so long as you don't make/use another library that uses objects + methods of the same name.
 using namespace operations_research::sat;
 
-
+//converts from coordinates done in terms of the bottom left corner to instead be in terms of the upper left corner, which is the system that arrays + vectors follow
+// Bottom left coords are done in terms of column then row, so this also switches back to row, column that arrays utilize
+Coordinate graphCoordToArrCoord(const Coordinate& coordFromBottomLeft, const std::vector<std::vector<char>>& wublinMapArr)
+{
+    int x = coordFromBottomLeft.first;
+    int y = coordFromBottomLeft.second;
+    return Coordinate( (wublinMapArr.size() - 1) - y, x); 
+} // arrs are row, column
 
 // TODO: MAKE SURE TO ADD CONDITION OF: If hateradius = 0, then SKIP ASSIGNING THE CONSTRAINTS
 // HUGE TODO: Need to research rare + epic hate relationship with the rarities below it (it appear to be MUCH more complicated than thought)
@@ -212,11 +219,6 @@ void addNegativePolPrevention(int i, int hateRadius, CpModelBuilder& wublinProbl
        
 }
 
-
-
-
-
-
 void addPositivePolRequirement(int targetI, int likeRadius, CpModelBuilder& wublinProblem, const std::vector<Wublin>& wublinPool, 
     const std::vector<IntVar>& wublinsXAxis, const std::vector<IntVar>& wublinsYAxis)
 {
@@ -251,8 +253,7 @@ void addPositivePolRequirement(int targetI, int likeRadius, CpModelBuilder& wubl
     }
     wublinProblem.AddBoolOr(areWublinInPositivePolarityRadius);
 
-    //  I could use this to generate a layout where all rarities are near each other
-
+    //  I could use this to generate a layout where all rarities are near each other (This would REPLACE the above for loop
     /* Version to guarantee all wublins of same name are to be near each other (done via each wublins likes
         for (int likedWublinIndex : likedWublinIndexes)
     {
@@ -272,13 +273,8 @@ void addPositivePolRequirement(int targetI, int likeRadius, CpModelBuilder& wubl
     */
 }
 
-
-
-
-
-
 // REMINDER, PLACEMENT IS DONE IN TERMS OF THE BOTTOM LEFT CORNER
-void findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std::string>& wublinMapCoordPairs, const std::vector<Wublin>& wublinPool, const std::vector<std::vector<char>>& wublinMapArr) //Uses IBM's CPLEX to find all the maximum polarity placements using like radius and hate radius
+std::vector<Coordinate> findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std::string>& wublinMapCoordPairs, const std::vector<Wublin>& wublinPool, const std::vector<std::vector<char>>& wublinMapArr) //Uses IBM's CPLEX to find all the maximum polarity placements using like radius and hate radius
 {
     // 1. allowed groupings initializations + general problem setup
     CpModelBuilder wublinProblem; // model of the wublin PROBLEM
@@ -386,6 +382,8 @@ w w D D D S S T T B B Z Z T T t t P P P t t 0 ! ! ! ! ! ! ! 10
 
 
 /*
+* before (0,0) was bottom left after: (0,29)
+* 4,1 before, after: (4,28)
 ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 29
 ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 28
 ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! 27
@@ -422,25 +420,34 @@ w w D D D S S T T B B Z Z T T t t P P P t t 0 ! ! ! ! ! ! ! 10
   
     // Negative polarity is just another set of AddNoOverlap2D but done in sets of 2 instead
     // Positive polarity we have to figure out how to do the inverse of NoOverlap2d to say RequireOverlap2D
-std::cout << "Var count: " << wublinProblem.Proto().variables_size() << std::endl << "constraint count: " << wublinProblem.Proto().constraints_size() << std::endl;
+    std::cout << "Var count: " << wublinProblem.Proto().variables_size() << std::endl << "constraint count: " << wublinProblem.Proto().constraints_size() << std::endl;
 
     // Solver params + running
     std::cout << "Started solving!" << std::endl;
     Model model; // model for the SOLVER
     
+
+    std::vector<Coordinate> solution;
     model.Add(NewFeasibleSolutionObserver([&](const CpSolverResponse& result) 
     { // This logs ALL the feasible solutions the solver comes across
             // TODO: Add here how I want to log/extract the solutions
             std::cout << "Wublin solution:" << std::endl << "Finished in " << result.wall_time() << " seconds" << std::endl;
-            for (int i{ 0 }; i < wublinPool.size(); i++)       
-                std::cout << wublinPool[i].getName() << " = (" << SolutionIntegerValue(result, wublinsXAxis[i]) << "," << SolutionIntegerValue(result, wublinsYAxis[i]) << ")" << std::endl;
+            for (int i{ 0 }; i < wublinPool.size(); i++)
+            {
+                // conversion needed as solver was done in terms of (x,y) coords from the bottom left, arrays are actually in terms of (y,x) from the upper left
+                Coordinate solCoord = Coordinate(SolutionIntegerValue(result, wublinsXAxis[i]), SolutionIntegerValue(result, wublinsYAxis[i]));
+                solution.push_back(graphCoordToArrCoord(solCoord, wublinMapArr));
+                //std::cout << wublinPool[i].getName() << " = (" << solCoord.first << "," << solCoord.second << ")" << std::endl;
+            }
             
     }));
     SatParameters params;
     //params.set_max_time_in_seconds(86400);
     model.Add(NewSatParameters(params));
     const CpSolverResponse result = SolveCpModel(wublinProblem.Build(), &model); // solves problem and stores result
+    
     //
+    return solution;
     
 
 
@@ -548,90 +555,103 @@ int main()
 
     std::vector<Wublin> wublinPool = { //All you have to do to add a Wublin to the algorithm is to add the Wublin and their characteristics here, if you want multiples of a wublin, change the count
 //Common Wublins
-//              Name:           size:  Likes:             Hates:         count: (NOTE THAT COUNT IS "vestigial" and that the actual way to add duplicates is to just copy + paste the wublin in this vector
-        {Wublin("Brump",            2, "Fleechwurm",     "Blipsqueak",       1 )},
-        {Wublin("Zynth",            2, "Gheegur",        "Astropod",         1 )},
-        {Wublin("Zuuker",           2, "Maulch",         "Screemu",          1 )},
-        {Wublin("Blipsqueak",       2, "Screemu",        "Tympa",            1 )},
-        {Wublin("Bona-Petite",      3, "Zuuker",         "Creepuscule",      1 )},
-        {Wublin("Poewk",            3,"Brump",           "Bona-Petite",      1 )},
-        {Wublin("Screemu",          2,"Creepuscule",     "Pixolotl",         1 )},
-        {Wublin("Tympa",            2,"Poewk",           "Thwok",            1 )},
-        {Wublin("Creepuscule",      3,"Whajje",          "Gheegur",          1 )},
-        {Wublin("Whajje",           2,"Dwumrohl",        "Zynth",            1 )},
-        {Wublin("Astropod",         2,"Bona-Petite",     "Brump",            1 )},
-        {Wublin("Pixolotl",         2,"Scargo",          "Whajje",           1 )},
-        {Wublin("Thwok",            2,"Dermit",          "Zuuker",           1 )},
-        {Wublin("Dwumrohl",         3,"Astropod",        "Fleechwurm",       1 )},
-        {Wublin("Scargo",           3,"Blipsqueak",      "Maulch",           1 )},
-        {Wublin("Fleechwurm",       3,"Pixolotl",        "Dwumrohl",         1 )},
-        {Wublin("Maulch",           3,"Thwok",           "Poewk",            1 )},
-        {Wublin("Dermit",           3,"Zynth",           "Scargo",           1 )},
-        {Wublin("Gheegur",          3,"Tympa",           "Dermit",           1 )},
-        //{Wublin("Monculus",         2,"None",            "None",             1 )}, //This is an edge case
-        //{Wublin("Wubbox",           4,"None",            "None",             1 )},
+//              Name:           size:  Likes:             Hates:     
+        {Wublin("Brump",            2, "Fleechwurm",     "Blipsqueak"  )},
+        {Wublin("Zynth",            2, "Gheegur",        "Astropod"    )},
+        {Wublin("Zuuker",           2, "Maulch",         "Screemu"     )},
+        {Wublin("Blipsqueak",       2, "Screemu",        "Tympa"       )},
+        {Wublin("Bona-Petite",      3, "Zuuker",         "Creepuscule" )},
+        {Wublin("Poewk",            3,"Brump",           "Bona-Petite" )},
+        {Wublin("Screemu",          2,"Creepuscule",     "Pixolotl"    )},
+        {Wublin("Tympa",            2,"Poewk",           "Thwok"       )},
+        {Wublin("Creepuscule",      3,"Whajje",          "Gheegur"     )},
+        {Wublin("Whajje",           2,"Dwumrohl",        "Zynth"       )},
+        {Wublin("Astropod",         2,"Bona-Petite",     "Brump"       )},
+        {Wublin("Pixolotl",         2,"Scargo",          "Whajje"      )},
+        {Wublin("Thwok",            2,"Dermit",          "Zuuker"      )},
+        {Wublin("Dwumrohl",         3,"Astropod",        "Fleechwurm"  )},
+        {Wublin("Scargo",           3,"Blipsqueak",      "Maulch"      )},
+        {Wublin("Fleechwurm",       3,"Pixolotl",        "Dwumrohl"    )},
+        {Wublin("Maulch",           3,"Thwok",           "Poewk"       )},
+        {Wublin("Dermit",           3,"Zynth",           "Scargo"      )},
+        {Wublin("Gheegur",          3,"Tympa",           "Dermit"      )},
+        //{Wublin("Monculus",         2,"None",            "None" )}, //This is an edge case
+        //{Wublin("Wubbox",           4,"None",            "None" )},
 //Rare Wublins
-//              Name:           size:  Likes:             Hates:         count:
-        {Wublin("Rare Brump",       2,"Rare Fleechwurm", "Rare Blipsqueak",  1 )},
-        {Wublin("Rare Zynth",       2,"Rare Gheegur",    "Rare Astropod",    1 )},
-        {Wublin("Rare Zuuker",      2,"Rare Maulch",     "Rare Screemu",     1 )},
-        {Wublin("Rare Blipsqueak",  2,"Rare Screemu",    "Rare Tympa",       1 )},
-        {Wublin("Rare Bona-Petite", 3,"Rare Zuuker",     "Rare Creepuscule", 1 )},
-        {Wublin("Rare Poewk",       3,"Rare Brump",      "Rare Bona-Petite", 1 )},
-        {Wublin("Rare Screemu",     2,"Rare Creepuscule","Rare Pixolotl",    1 )},
-        {Wublin("Rare Tympa",       2,"Rare Poewk",      "Rare Thwok",       1 )},
-        {Wublin("Rare Creepuscule", 3,"Rare Whajje",     "Rare Gheegur",     1 )},
-        {Wublin("Rare Whajje",      2,"Rare Dwumrohl",   "Rare Zynth",       1 )},
-        {Wublin("Rare Astropod",    2,"Rare Bona-Petite","Rare Brump",       1 )},
-        {Wublin("Rare Pixolotl",    2,"Rare Scargo",     "Rare Whajje",      1 )},
-        {Wublin("Rare Thwok",       2,"Rare Dermit",     "Rare Zuuker",      1 )},
-        {Wublin("Rare Dwumrohl",    3,"Rare Astropod",   "Rare Fleechwurm",  1 )},
-        {Wublin("Rare Scargo",      3,"Rare Blipsqueak", "Rare Maulch",      1 )},
-        {Wublin("Rare Fleechwurm",  3,"Rare Pixolotl",   "Rare Dwumrohl",    1 )},
-        {Wublin("Rare Maulch",      3,"Rare Thwok",      "Rare Poewk",       1 )},
-        {Wublin("Rare Dermit",      3,"Rare Zynth",      "Rare Scargo",      1 )},
-        {Wublin("Rare Gheegur",     3,"Rare Tympa",      "Rare Dermit",      1 )},
-        //{Wublin("Rare Monculus",    2,"None",            "None",             1 )}, //This is an edge case
-        //{Wublin("Rare Wubbox",      4,"None",            "None",             1 )},
+//              Name:           size:  Likes:             Hates:        
+        {Wublin("Rare Brump",       2,"Rare Fleechwurm", "Rare Blipsqueak"  )},
+        {Wublin("Rare Zynth",       2,"Rare Gheegur",    "Rare Astropod"    )},
+        {Wublin("Rare Zuuker",      2,"Rare Maulch",     "Rare Screemu"     )},
+        {Wublin("Rare Blipsqueak",  2,"Rare Screemu",    "Rare Tympa"       )},
+        {Wublin("Rare Bona-Petite", 3,"Rare Zuuker",     "Rare Creepuscule" )},
+        {Wublin("Rare Poewk",       3,"Rare Brump",      "Rare Bona-Petite" )},
+        {Wublin("Rare Screemu",     2,"Rare Creepuscule","Rare Pixolotl"    )},
+        {Wublin("Rare Tympa",       2,"Rare Poewk",      "Rare Thwok"       )},
+        {Wublin("Rare Creepuscule", 3,"Rare Whajje",     "Rare Gheegur"     )},
+        {Wublin("Rare Whajje",      2,"Rare Dwumrohl",   "Rare Zynth"       )},
+        {Wublin("Rare Astropod",    2,"Rare Bona-Petite","Rare Brump"       )},
+        {Wublin("Rare Pixolotl",    2,"Rare Scargo",     "Rare Whajje"      )},
+        {Wublin("Rare Thwok",       2,"Rare Dermit",     "Rare Zuuker"      )},
+        {Wublin("Rare Dwumrohl",    3,"Rare Astropod",   "Rare Fleechwurm"  )},
+        {Wublin("Rare Scargo",      3,"Rare Blipsqueak", "Rare Maulch"      )},
+        {Wublin("Rare Fleechwurm",  3,"Rare Pixolotl",   "Rare Dwumrohl"    )},
+        {Wublin("Rare Maulch",      3,"Rare Thwok",      "Rare Poewk"       )},
+        {Wublin("Rare Dermit",      3,"Rare Zynth",      "Rare Scargo"      )},
+        {Wublin("Rare Gheegur",     3,"Rare Tympa",      "Rare Dermit"      )},
+        //{Wublin("Rare Monculus",    2,"None",            "None" )}, //This is an edge case
+        //{Wublin("Rare Wubbox",      4,"None",            "None" )},
 //Epic Wublins (Not all of these are officially released yet).
-//              Name:            size: Likes:            Hates:          count: ID:
-        {Wublin("Epic Brump",       2,"Epic Fleechwurm", "Epic Blipsqueak",  1 )},
-        {Wublin("Epic Zynth",       2,"Epic Gheegur",    "Epic Astropod",    1 )},
-        {Wublin("Epic Zuuker",      2,"Epic Maulch",     "Epic Screemu",     1 )},
-        {Wublin("Epic Blipsqueak",  2,"Epic Screemu",    "Epic Tympa",       1 )},
-        {Wublin("Epic Bona-Petite", 3,"Epic Zuuker",     "Epic Creepuscule", 1 )},
-        {Wublin("Epic Poewk",       3,"Epic Brump",      "Epic Bona-Petite", 1 )},
-        {Wublin("Epic Screemu",     2,"Epic Creepuscule","Epic Pixolotl",    1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Tympa",       2,"Epic Poewk",      "Epic Thwok",       1 )},
-        {Wublin("Epic Creepuscule", 3,"Epic Whajje",     "Epic Gheegur",     1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Whajje",      2,"Epic Dwumrohl",   "Epic Zynth",       1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Astropod",    2,"Epic Bona-Petite","Epic Brump",       1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Pixolotl",    2,"Epic Scargo",     "Epic Whajje",      1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Thwok",       2,"Epic Dermit",     "Epic Zuuker",      1 )},
-        {Wublin("Epic Dwumrohl",    3,"Epic Astropod",   "Epic Fleechwurm",  1 )},
-        {Wublin("Epic Scargo",      3,"Epic Blipsqueak", "Epic Maulch",      1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Fleechwurm",  3,"Epic Pixolotl",   "Epic Dwumrohl",    1 )},
-        {Wublin("Epic Maulch",      3,"Epic Thwok",      "Epic Poewk",       1 )}, // Unreleased as of 7/25/26
-        {Wublin("Epic Dermit",      3,"Epic Zynth",      "Epic Scargo",      1 )},
-        {Wublin("Epic Gheegur",     3,"Epic Tympa",      "Epic Dermit",      1 )},
-        //{Wublin("Epic Wubbox",      4,"None",            "None",             1 )},
-        //{Wublin("Epic Monculus",    2,"None",            "None",             1 )}, //This is an edge case (along with wubbox)
+//              Name:            size: Likes:            Hates:          
+        {Wublin("Epic Brump",       2,"Epic Fleechwurm", "Epic Blipsqueak"  )},
+        {Wublin("Epic Zynth",       2,"Epic Gheegur",    "Epic Astropod"    )},
+        {Wublin("Epic Zuuker",      2,"Epic Maulch",     "Epic Screemu"     )},
+        {Wublin("Epic Blipsqueak",  2,"Epic Screemu",    "Epic Tympa"       )},
+        {Wublin("Epic Bona-Petite", 3,"Epic Zuuker",     "Epic Creepuscule" )},
+        {Wublin("Epic Poewk",       3,"Epic Brump",      "Epic Bona-Petite" )},
+        {Wublin("Epic Screemu",     2,"Epic Creepuscule","Epic Pixolotl"    )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Tympa",       2,"Epic Poewk",      "Epic Thwok"       )},
+        {Wublin("Epic Creepuscule", 3,"Epic Whajje",     "Epic Gheegur"     )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Whajje",      2,"Epic Dwumrohl",   "Epic Zynth"       )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Astropod",    2,"Epic Bona-Petite","Epic Brump"       )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Pixolotl",    2,"Epic Scargo",     "Epic Whajje"      )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Thwok",       2,"Epic Dermit",     "Epic Zuuker"      )},
+        {Wublin("Epic Dwumrohl",    3,"Epic Astropod",   "Epic Fleechwurm"  )},
+        {Wublin("Epic Scargo",      3,"Epic Blipsqueak", "Epic Maulch"      )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Fleechwurm",  3,"Epic Pixolotl",   "Epic Dwumrohl"    )},
+        {Wublin("Epic Maulch",      3,"Epic Thwok",      "Epic Poewk"       )}, // Unreleased as of 7/25/26
+        {Wublin("Epic Dermit",      3,"Epic Zynth",      "Epic Scargo"      )},
+        {Wublin("Epic Gheegur",     3,"Epic Tympa",      "Epic Dermit"      )},
+        //{Wublin("Epic Wubbox",      4,"None",            "None" )},
+        //{Wublin("Epic Monculus",    2,"None",            "None" )}, //This is an edge case (along with wubbox)
     };
     
     for(int r{0}; r < 30; r++)
     {
         for(int c{0}; c < 30; c++)
-        {
             std::cout << wublinMapArr[r][c] << " ";
-        }
         std::cout << '\n';
     }
 
     std::map<Coordinate,std::string> wublinMapCoordPairs = wublinArrToCoordinatePairMap(wublinMapArr);
 
+    std::vector<Coordinate> sol = findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr);
 
-    findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr);
-    std::cout << "DONE!";
+    std::cout << "DONE\n";
+
+    int i = 0;
+    for (Coordinate c : sol)
+    {
+        std::cout << wublinPool[i].getName() << ": row = " << c.first << ", col = " << c.second << '\n';
+        wublinMapArr[c.first][c.second] = wublinPool[i].getName()[0];
+        i++;
+    }
+    for (int r{ 0 }; r < 30; r++)
+    {
+        for (int c{ 0 }; c < 30; c++)       
+            std::cout << wublinMapArr[r][c] << " ";
+        std::cout << '\n';
+    }
+    
 }
 
 
@@ -1014,3 +1034,7 @@ DONE!
 
 // 11 TYMPAS:
 */
+
+
+
+// Add use case diagram 

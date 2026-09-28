@@ -5,7 +5,6 @@
 class Wublin
 {
     private:
-        int count{};
         int size{};
         std::string name{};
         std::string likes{};
@@ -21,8 +20,6 @@ class Wublin
         void setLikes(std::string l);
         std::string getHates() const;
         void setHates(std::string h);
-        int getCount() const;
-        void setCount(int c);
 };
 std::ostream& operator<<(std::ostream& os, const Wublin& passedWublin);        
 
