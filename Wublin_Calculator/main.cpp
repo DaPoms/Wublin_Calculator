@@ -4,6 +4,13 @@
 #include <map> // for representing wublin map with a coordinate pair system
 #include <utility> // for pairs
 #include <algorithm>// For find
+#include <functional> // For converting bitset into hash
+#include <fstream>
+
+#include "json.hpp" // External library for json object model
+using json = nlohmann::json;
+
+// https://stackoverflow.com/questions/37007307/fast-hash-function-for-stdvector Resource from user slbie who denotes how to get hash
 using Coordinate = std::pair<int, int>; // type alias 
 
 // All imports required for google's CP-SAT
@@ -17,6 +24,19 @@ using Coordinate = std::pair<int, int>; // type alias
 #include "ortools/util/sorted_interval_list.h"
 using namespace operations_research; //this is fine so long as you don't make/use another library that uses objects + methods of the same name.
 using namespace operations_research::sat;
+
+size_t calculateLayoutID(std::vector<Coordinate>& v) // Due to bitset, this method only works for the wublin problem. To fix this, just replace the "57" in the bitset size declaration to the number of monsters in the problem
+{
+
+    std::bitset<57 * sizeof(int) * 2 * 8> t{}; // This is bad practice (hardcoded for the number of wublins)
+    for (int c{0}; c < v.size(); c++)
+    {
+        std::bitset<sizeof(Coordinate) * 8> b{(static_cast<unsigned long long>(v[c].first) << 32) | v[c].second};
+        for (int i{ 0 }; i < b.size(); i++)
+            t[i + (c * sizeof(Coordinate) * 8)] = b[i]; // 4 is size of int in bytes, 8 converts bytes to bits
+    }
+    return std::hash<decltype(t)>{}(t); // learned that decltype() can be used to get type of a var
+}
 
 //converts from coordinates done in terms of the bottom left corner to instead be in terms of the upper left corner, which is the system that arrays + vectors follow
 // Bottom left coords are done in terms of column then row, so this also switches back to row, column that arrays utilize
@@ -428,29 +448,33 @@ w w D D D S S T T B B Z Z T T t t P P P t t 0 ! ! ! ! ! ! ! 10
     
 
     std::vector<Coordinate> solution;
+
+    std::ofstream jsonAnswers{"wublinSolutions.json"};
+    json jsonifiedAllSolutions = json::array();
     model.Add(NewFeasibleSolutionObserver([&](const CpSolverResponse& result) 
     { // This logs ALL the feasible solutions the solver comes across
-            // TODO: Add here how I want to log/extract the solutions
-            std::cout << "Wublin solution:" << std::endl << "Finished in " << result.wall_time() << " seconds" << std::endl;
-            for (int i{ 0 }; i < wublinPool.size(); i++)
-            {
-                // conversion needed as solver was done in terms of (x,y) coords from the bottom left, arrays are actually in terms of (y,x) from the upper left
-                Coordinate solCoord = Coordinate(SolutionIntegerValue(result, wublinsXAxis[i]), SolutionIntegerValue(result, wublinsYAxis[i]));
-                solution.push_back(graphCoordToArrCoord(solCoord, wublinMapArr));
-                //std::cout << wublinPool[i].getName() << " = (" << solCoord.first << "," << solCoord.second << ")" << std::endl;
-            }
-            
+        // TODO: Add here how I want to log/extract the solutions
+        std::cout << "Wublin solution:" << std::endl << "Finished in " << result.wall_time() << " seconds" << std::endl;
+        for (int i{ 0 }; i < wublinPool.size(); i++)
+        {
+            // conversion needed as solver was done in terms of (x,y) coords from the bottom left, arrays are actually in terms of (y,x) from the upper left
+            Coordinate solCoord = Coordinate(SolutionIntegerValue(result, wublinsXAxis[i]), SolutionIntegerValue(result, wublinsYAxis[i]));
+            solution.push_back(graphCoordToArrCoord(solCoord, wublinMapArr));
+            //std::cout << wublinPool[i].getName() << " = (" << solCoord.first << "," << solCoord.second << ")" << std::endl;
+        }
+
+
+        jsonifiedAllSolutions.push_back( { {"ID", calculateLayoutID(solution)}, {"Solution", solution} } ); // TODO
+
+        
     }));
     SatParameters params;
     //params.set_max_time_in_seconds(86400);
     model.Add(NewSatParameters(params));
     const CpSolverResponse result = SolveCpModel(wublinProblem.Build(), &model); // solves problem and stores result
-    
     //
+    jsonAnswers << std::setw(4) << jsonifiedAllSolutions;
     return solution;
-    
-
-
 }
 
 //In converting from array representation to a coordinate based map, the coordinates are made with the bottom left being (0,0). Going right increases the x and up increases the y.
@@ -634,7 +658,7 @@ int main()
 
     std::map<Coordinate,std::string> wublinMapCoordPairs = wublinArrToCoordinatePairMap(wublinMapArr);
 
-    std::vector<Coordinate> sol = findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr);
+    std::vector<Coordinate> sol = findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr); // will be converted to a vector<vector<Coordinate>>
 
     std::cout << "DONE\n";
 
@@ -651,6 +675,8 @@ int main()
             std::cout << wublinMapArr[r][c] << " ";
         std::cout << '\n';
     }
+
+    std::cout << "UNIQUE IDX: " << calculateLayoutID(sol) << '\n';
     
 }
 
@@ -1038,3 +1064,8 @@ DONE!
 
 
 // Add use case diagram 
+
+// Could assign a layout a unique/hash value/ID for use in database (cheap check for adding new layouts and avoiding duplicates). 
+
+
+// Look into "Ingestion scripts" for database, effectively a script that updates the PostgreSQL database with the JSON file (handling the parsing)
