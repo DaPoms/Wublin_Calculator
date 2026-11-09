@@ -47,9 +47,8 @@ Coordinate graphCoordToArrCoord(const Coordinate& coordFromBottomLeft, const std
     return Coordinate( (wublinMapArr.size() - 1) - y, x); 
 } // arrs are row, column
 
-// TODO: MAKE SURE TO ADD CONDITION OF: If hateradius = 0, then SKIP ASSIGNING THE CONSTRAINTS
-// HUGE TODO: Need to research rare + epic hate relationship with the rarities below it (it appear to be MUCH more complicated than thought)
-// Current theory is that we need to add to hate constraints all the rarities of the negative polarity monster in the veto list
+
+
 // Possibly still allow my current layout settings but add a filter to show only solutions that have NO harm on polarity at ALL (in my release version)
 
 // OR look into increasing solution pool size
@@ -294,7 +293,7 @@ void addPositivePolRequirement(int targetI, int likeRadius, CpModelBuilder& wubl
 }
 
 // REMINDER, PLACEMENT IS DONE IN TERMS OF THE BOTTOM LEFT CORNER
-std::vector<Coordinate> findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std::string>& wublinMapCoordPairs, const std::vector<Wublin>& wublinPool, const std::vector<std::vector<char>>& wublinMapArr) //Uses IBM's CPLEX to find all the maximum polarity placements using like radius and hate radius
+json findLayouts(int likeRadius, int hateRadius, const std::map<Coordinate, std::string>& wublinMapCoordPairs, const std::vector<Wublin>& wublinPool, const std::vector<std::vector<char>>& wublinMapArr) //Uses IBM's CPLEX to find all the maximum polarity placements using like radius and hate radius
 {
     // 1. allowed groupings initializations + general problem setup
     CpModelBuilder wublinProblem; // model of the wublin PROBLEM
@@ -446,13 +445,10 @@ w w D D D S S T T B B Z Z T T t t P P P t t 0 ! ! ! ! ! ! ! 10
     std::cout << "Started solving!" << std::endl;
     Model model; // model for the SOLVER
     
-
-    std::vector<Coordinate> solution;
-
-    std::ofstream jsonAnswers{"wublinSolutions.json"};
     json jsonifiedAllSolutions = json::array();
     model.Add(NewFeasibleSolutionObserver([&](const CpSolverResponse& result) 
     { // This logs ALL the feasible solutions the solver comes across
+        std::vector<Coordinate> solution;
         // TODO: Add here how I want to log/extract the solutions
         std::cout << "Wublin solution:" << std::endl << "Finished in " << result.wall_time() << " seconds" << std::endl;
         for (int i{ 0 }; i < wublinPool.size(); i++)
@@ -460,21 +456,19 @@ w w D D D S S T T B B Z Z T T t t P P P t t 0 ! ! ! ! ! ! ! 10
             // conversion needed as solver was done in terms of (x,y) coords from the bottom left, arrays are actually in terms of (y,x) from the upper left
             Coordinate solCoord = Coordinate(SolutionIntegerValue(result, wublinsXAxis[i]), SolutionIntegerValue(result, wublinsYAxis[i]));
             solution.push_back(graphCoordToArrCoord(solCoord, wublinMapArr));
-            //std::cout << wublinPool[i].getName() << " = (" << solCoord.first << "," << solCoord.second << ")" << std::endl;
         }
-
-
-        jsonifiedAllSolutions.push_back( { {"ID", calculateLayoutID(solution)}, {"Solution", solution} } ); // TODO
+        jsonifiedAllSolutions.push_back( { {"ID", calculateLayoutID(solution)}, {"Solution", solution} } );
 
         
     }));
     SatParameters params;
-    //params.set_max_time_in_seconds(86400);
+    params.set_max_time_in_seconds(120);
+    params.set_enumerate_all_solutions(true);
     model.Add(NewSatParameters(params));
     const CpSolverResponse result = SolveCpModel(wublinProblem.Build(), &model); // solves problem and stores result
     //
-    jsonAnswers << std::setw(4) << jsonifiedAllSolutions;
-    return solution;
+    //jsonAnswers << std::setw(4) << jsonifiedAllSolutions;
+    return jsonifiedAllSolutions;
 }
 
 //In converting from array representation to a coordinate based map, the coordinates are made with the bottom left being (0,0). Going right increases the x and up increases the y.
@@ -540,7 +534,6 @@ int main()
     {'!', '!', '!', '!', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'},
     {'!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '0', '0', '0', '0', '0', '0', '0', '0', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!', '!'}
     };
-
 
 /*
     std::vector<std::vector<char>> wublinMapArr= {
@@ -658,10 +651,12 @@ int main()
 
     std::map<Coordinate,std::string> wublinMapCoordPairs = wublinArrToCoordinatePairMap(wublinMapArr);
 
-    std::vector<Coordinate> sol = findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr); // will be converted to a vector<vector<Coordinate>>
+    json sols = findLayouts(likeRadius,hateRadius, wublinMapCoordPairs, wublinPool, wublinMapArr); // will be converted to a vector<vector<Coordinate>>
+    std::ofstream jsonAnswers{"wublinSolutions.json"};
+    jsonAnswers << std::setw(4) << sols;
 
     std::cout << "DONE\n";
-
+/*
     int i = 0;
     for (Coordinate c : sol)
     {
@@ -677,12 +672,9 @@ int main()
     }
 
     std::cout << "UNIQUE IDX: " << calculateLayoutID(sol) << '\n';
-    
+    */
 }
 
-
-
-// Answer should probably be stored as a vector of ints (each square is given a number), with the ith index of the vector representing the ith wublin from the wublinPool vector
 
 // SOLUTIONS REPRESENT THE BOTTOM LEFT PLACEMENT
 /*
@@ -1060,12 +1052,5 @@ DONE!
 
 // 11 TYMPAS:
 */
-
-
-
-// Add use case diagram 
-
-// Could assign a layout a unique/hash value/ID for use in database (cheap check for adding new layouts and avoiding duplicates). 
-
 
 // Look into "Ingestion scripts" for database, effectively a script that updates the PostgreSQL database with the JSON file (handling the parsing)
