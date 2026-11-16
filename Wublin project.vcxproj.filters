@@ -26,6 +26,9 @@
     <ClInclude Include="wublin_calculator\wublin.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Wublin_project\Wublin_Calculator\json.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Wublin_Calculator\CMakeLists.txt" />

@@ -152,6 +152,7 @@
     <ClCompile Include="wublin_calculator\wublin.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Wublin_project\Wublin_Calculator\json.hpp" />
     <ClInclude Include="wublin_calculator\wublin.h" />
   </ItemGroup>
   <ItemGroup>
